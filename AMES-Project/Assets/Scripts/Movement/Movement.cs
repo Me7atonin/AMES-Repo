@@ -1,192 +1,204 @@
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class FirstPersonController : MonoBehaviour
 {
-    public float walkSpeed = 3.0f;               // Walking speed
-    public float sprintSpeed = 6.0f;             // Sprinting speed
-    public float crouchSpeed = 1.5f;             // Crouch speed
-    public float lookSpeedX = 2.0f;              // Mouse look speed (left and right)
-    public float lookSpeedY = 2.0f;              // Mouse look speed (up and down)
+    // Movement speeds
+    public float walkSpeed = 3.0f;
+    public float sprintSpeed = 6.0f;
+    public float crouchSpeed = 1.5f;
+    public float lookSpeedX = 2.0f;
+    public float lookSpeedY = 2.0f;
 
-    // View bobbing variables
-    public float bobbingAmount = 0.1f;           // How much the camera bobs up and down
-    public float bobbingSpeed = 10.0f;           // Speed of bobbing (how fast it oscillates)
-    public float sideBobbingAmount = 0.025f;     // Side to side bobbing amount (for horror)
-    public float sideBobbingSpeed = 1.5f;        // Speed of side to side bobbing (for tension)
+    // View bobbing
+    public float bobbingAmount = 0.1f;
+    public float bobbingSpeed = 10.0f;
+    public float sideBobbingAmount = 0.025f;
+    public float sideBobbingSpeed = 1.5f;
 
-    // Camera tilt variables
-    public float tiltAmount = 2.0f;              // Maximum tilt in degrees (side to side)
-    public float tiltSpeed = 2.5f;               // Speed of tilt transition
+    // Camera tilt
+    public float tiltAmount = 2.0f;
+    public float tiltSpeed = 2.5f;
 
-    private Camera playerCamera;
-    private Transform playerTransform;
-    private float rotationX = 0;
-    private float timer = 0f;                    // Timer to control the bobbing frequency
-    private bool isWalking = false;              // Is player currently walking
-    private bool isSprinting = false;            // Is player sprinting?
-    private bool isCrouching = false;            // Is player crouching?
-
-    private float currentTilt = 0.0f;            // Current tilt angle
-    private float targetTilt = 0.0f;             // Target tilt angle
-
-    // Crouch settings
-    public float crouchHeight = 0.5f;            // Height when crouching
-    public float standingHeight = 2.0f;          // Height when standing
-    public float crouchSpeedModifier = 0.5f;     // Speed multiplier while crouching
+    // Crouching settings
+    public float crouchHeight = 0.5f;
+    public float standingHeight = 2.0f;
     private float targetHeight;
 
-    // Jumping settings
-    public float jumpForce = 3.0f;              // Force of the jump (small height)
-    public float gravity = -9.81f;               // Gravity value (affects falling speed)
-    private bool isJumping = false;              // Is the player in the air?
-    private float velocityY = 0f;                // Current vertical velocity (for gravity and jumping)
+    // Jump settings
+    public float jumpForce = 3.0f;
+    public float gravity = -9.81f;
+    private float velocityY = 0f;
 
-    // Start is called before the first frame update
+    // Internal variables
+    private Camera playerCamera;
+    private Transform playerTransform;
+    private Rigidbody rb;
+    private float rotationX = 0;
+    private float timer = 0f;
+
+    private bool isSprinting = false;
+    private bool isCrouching = false;
+    private bool isJumping = false;
+    private bool isWalking = false;
+
+    private float currentTilt = 0.0f;
+    private float targetTilt = 0.0f;
+
     void Start()
     {
-        playerCamera = GetComponentInChildren<Camera>(); // Find camera attached to player
+        playerCamera = GetComponentInChildren<Camera>();
         playerTransform = transform;
-        Cursor.lockState = CursorLockMode.Locked;  // Lock the cursor
-        Cursor.visible = false; // Hide the cursor
+        rb = GetComponent<Rigidbody>();
+        rb.freezeRotation = true; // Prevent the Rigidbody from rotating
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous; // Prevent going through objects
 
-        // Initialize standing height
-        targetHeight = standingHeight;
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
+
+        targetHeight = standingHeight; // Set to standing height initially
     }
 
-    // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
-        // Handle crouching input (C key)
-        if (Input.GetKeyDown(KeyCode.LeftControl))
-        {
-            isCrouching = !isCrouching;
-
-            // Toggle crouch height
-            targetHeight = isCrouching ? crouchHeight : standingHeight;
-        }
-
-        // Handle sprint input (Left Shift key)
-        isSprinting = Input.GetKey(KeyCode.LeftShift) && !isCrouching;
-
-        // Set movement speed based on sprinting and crouching
-        float currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
-
-        // Player movement
-        float moveDirectionX = Input.GetAxis("Horizontal") * currentSpeed * Time.deltaTime;
-        float moveDirectionZ = Input.GetAxis("Vertical") * currentSpeed * Time.deltaTime;
-        playerTransform.Translate(moveDirectionX, 0, moveDirectionZ);
-
-        // Check if player is walking or sprinting
-        isWalking = Mathf.Abs(Input.GetAxis("Vertical")) > 0 || Mathf.Abs(Input.GetAxis("Horizontal")) > 0;
-
-        // View bobbing effect
-        HandleBobbing();
-
-        // Handle camera tilt based on movement
-        HandleCameraTilt();
-
-        // Looking around
-        float rotationY = Input.GetAxis("Mouse X") * lookSpeedX;
-        rotationX -= Input.GetAxis("Mouse Y") * lookSpeedY;
-        rotationX = Mathf.Clamp(rotationX, -90f, 90f); // Prevent camera from rotating too far
-
-        // Apply rotations
-        playerTransform.Rotate(0, rotationY, 0); // Rotate the player body (left/right)
-        playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, 0); // Rotate the camera (up/down)
-
-        // Smoothly adjust height (for crouching)
-        playerTransform.localScale = new Vector3(1, Mathf.Lerp(playerTransform.localScale.y, targetHeight, Time.deltaTime * 8f), 1);
-        playerCamera.transform.localPosition = new Vector3(playerCamera.transform.localPosition.x, Mathf.Lerp(playerCamera.transform.localPosition.y, targetHeight / 2f, Time.deltaTime * 8f), playerCamera.transform.localPosition.z);
-
-        // Handle jumping
+        // Handle movement and jumping (FixedUpdate is better for physics-based movement)
+        HandleMovement();
         HandleJumping();
     }
 
-    // Handles view bobbing (side-to-side and up-and-down movements)
+    void Update()
+    {
+        // Handle input-based actions like crouching, sprinting, and looking around
+        HandleCrouching();
+        HandleSprinting();
+        HandleLookingAround();
+        HandleBobbing();
+        HandleCameraTilt();
+    }
+
+    void HandleMovement()
+    {
+        // Get movement input (WASD or arrow keys)
+        float currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
+        float moveDirectionX = Input.GetAxis("Horizontal") * currentSpeed * Time.deltaTime;
+        float moveDirectionZ = Input.GetAxis("Vertical") * currentSpeed * Time.deltaTime;
+
+        // Combine inputs into a Vector3 (for movement)
+        Vector3 move = new Vector3(moveDirectionX, 0, moveDirectionZ);
+        move = playerCamera.transform.TransformDirection(move); // Make movement relative to camera's facing
+        move.y = 0; // Keep movement on the ground plane
+
+        // Apply movement using Rigidbody's MovePosition (helps prevent clipping and works with physics)
+        Vector3 newPosition = rb.position + move;
+        rb.MovePosition(newPosition);
+    }
+
+    void HandleJumping()
+    {
+        // Check if the player is grounded
+        bool isGrounded = Physics.Raycast(playerTransform.position, Vector3.down, 1.1f);
+
+        if (isGrounded)
+        {
+            if (velocityY < 0)
+            {
+                velocityY = 0f; // Stop downward movement if grounded
+            }
+
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                // Apply jump force if the player presses Space and is grounded
+                velocityY = jumpForce;
+            }
+        }
+        else
+        {
+            // If not grounded, apply gravity
+            velocityY += gravity * Time.deltaTime;
+        }
+
+        // Apply the Y velocity (for jumping/falling)
+        Vector3 velocity = rb.velocity;
+        velocity.y = velocityY;
+        rb.velocity = velocity;
+    }
+
+    void HandleCrouching()
+    {
+        // Handle crouching input (LeftControl key)
+        if (Input.GetKeyDown(KeyCode.LeftControl))
+        {
+            isCrouching = !isCrouching;
+            targetHeight = isCrouching ? crouchHeight : standingHeight; // Toggle crouch height
+        }
+
+        // Smoothly adjust height when crouching or standing
+        playerTransform.localScale = new Vector3(1, Mathf.Lerp(playerTransform.localScale.y, targetHeight, Time.deltaTime * 8f), 1);
+        playerCamera.transform.localPosition = new Vector3(playerCamera.transform.localPosition.x, Mathf.Lerp(playerCamera.transform.localPosition.y, targetHeight / 2f, Time.deltaTime * 8f), playerCamera.transform.localPosition.z);
+    }
+
+    void HandleSprinting()
+    {
+        // Check if the player is sprinting (LeftShift key)
+        isSprinting = Input.GetKey(KeyCode.LeftShift) && !isCrouching;
+    }
+
+    void HandleLookingAround()
+    {
+        // Handle mouse look input (for looking around)
+        float rotationY = Input.GetAxis("Mouse X") * lookSpeedX;
+        rotationX -= Input.GetAxis("Mouse Y") * lookSpeedY;
+        rotationX = Mathf.Clamp(rotationX, -90f, 90f); // Prevent camera from rotating too far up/down
+
+        // Apply rotations
+        playerTransform.Rotate(0, rotationY, 0); // Rotate player body
+        playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, 0); // Rotate camera up/down
+    }
+
     void HandleBobbing()
     {
         if (isWalking)
         {
-            // If player is moving, apply the bobbing
+            // Bob the camera up and down while walking
             timer += Time.deltaTime * bobbingSpeed;
-
-            // Calculate up/down (vertical) motion smoothly
             float newY = Mathf.Sin(timer) * bobbingAmount;
-
-            // Calculate side-to-side (horizontal) motion smoothly
             float newX = Mathf.Sin(timer * sideBobbingSpeed) * sideBobbingAmount;
 
             // Double the effect while sprinting
             if (isSprinting)
             {
-                newY *= 2f;  // Double vertical bobbing while sprinting
-                newX *= 2f;  // Double horizontal bobbing while sprinting
+                newY *= 2f;
+                newX *= 2f;
             }
 
-            // Apply both vertical and horizontal bobbing to the camera's local position
             Vector3 targetPosition = new Vector3(newX, newY, playerCamera.transform.localPosition.z);
-
-            // Smoothly interpolate the camera's position to avoid jitter
             playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, targetPosition, Time.deltaTime * 10f);
         }
         else
         {
-            // If the player is not moving, reset the camera's position smoothly
             Vector3 targetPosition = new Vector3(0, 0, playerCamera.transform.localPosition.z);
             playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, targetPosition, Time.deltaTime * 10f);
         }
     }
 
-    // Handles camera tilt effect based on player movement (left and right)
     void HandleCameraTilt()
     {
-        // Get horizontal movement input
-        float moveInput = Input.GetAxis("Horizontal");
-
-        // Calculate target tilt based on movement direction
-        if (moveInput > 0)
-            targetTilt = -tiltAmount; // Tilt left
-        else if (moveInput < 0)
-            targetTilt = tiltAmount;  // Tilt right
-        else
-            targetTilt = 0.0f;       // No movement
-
-        // Double the tilt effect while sprinting for more intensity
-        if (isSprinting)
+        // Only apply the sway effect if the player is walking or sprinting
+        if (isWalking || isSprinting)
         {
-            targetTilt *= 2f;  // Double the tilt while sprinting
+            // Create a smooth back-and-forth sway effect with a sine wave function
+            float sway = Mathf.Sin(Time.time * tiltSpeed) * tiltAmount;
+
+            // Apply the sway to the camera's local rotation
+            currentTilt = Mathf.Lerp(currentTilt, sway, Time.deltaTime * tiltSpeed);
+        }
+        else
+        {
+            // Smoothly reset the tilt when the player is not moving
+            currentTilt = Mathf.Lerp(currentTilt, 0f, Time.deltaTime * tiltSpeed);
         }
 
-        // Smoothly transition to the target tilt
-        currentTilt = Mathf.Lerp(currentTilt, targetTilt, Time.deltaTime * tiltSpeed);
-
-        // Apply the tilt to the camera's Z-axis rotation
+        // Apply the calculated tilt to the camera
         playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, currentTilt);
-    }
-
-    // Handle the jump (check if grounded, apply gravity, and jump force)
-    void HandleJumping()
-    {
-        if (isJumping)
-        {
-            velocityY += gravity * Time.deltaTime; // Apply gravity
-
-            if (playerTransform.position.y <= 0f)
-            {
-                isJumping = false; // Stop jumping when hitting the ground
-                velocityY = 0f; // Reset vertical velocity
-            }
-        }
-        else
-        {
-            if (Input.GetKeyDown(KeyCode.Space)) // Press Space to jump
-            {
-                isJumping = true;
-                velocityY = jumpForce; // Apply jump force upwards
-            }
-        }
-
-        // Apply the vertical velocity (falling or jumping)
-        playerTransform.Translate(Vector3.up * velocityY * Time.deltaTime);
     }
 }
