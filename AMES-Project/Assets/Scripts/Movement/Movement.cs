@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 [RequireComponent(typeof(Rigidbody))]
 public class FirstPersonController : MonoBehaviour
@@ -30,6 +32,13 @@ public class FirstPersonController : MonoBehaviour
     public float gravity = -9.81f;
     private float velocityY = 0f;
 
+    // Stamina settings
+    public float maxStamina = 20f;
+    public float currentStamina = 20f;
+    public float staminaDepletionRate = 20f; // How fast stamina depletes while sprinting
+    public float staminaRegenerationRate = 10f; // How fast stamina regenerates when not sprinting
+    private bool isExhausted = false;
+
     // Internal variables
     private Camera playerCamera;
     private Transform playerTransform;
@@ -45,6 +54,13 @@ public class FirstPersonController : MonoBehaviour
     private float currentTilt = 0.0f;
     private float targetTilt = 0.0f;
 
+    // Vignette Post-Processing Variables
+    private Volume postProcessVolume;
+    private Vignette vignette;
+    private float sprintVignetteIntensity = 0.6f; // Max intensity during sprinting
+    private float normalVignetteIntensity = 0.275f; // Normal intensity when not sprinting
+    private float vignetteLerpSpeed = 5.0f; // Speed of transitioning vignette intensity
+
     void Start()
     {
         playerCamera = GetComponentInChildren<Camera>();
@@ -57,6 +73,18 @@ public class FirstPersonController : MonoBehaviour
         Cursor.visible = false;
 
         targetHeight = standingHeight; // Set to standing height initially
+
+        // Find the PostProcessVolume and get the Vignette effect
+        postProcessVolume = GetComponentInChildren<Volume>();
+        if (postProcessVolume != null)
+        {
+            // Attempt to get the Vignette component from the volume
+            postProcessVolume.profile.TryGet(out vignette);
+        }
+        else
+        {
+            Debug.LogWarning("PostProcessVolume not found in the scene.");
+        }
     }
 
     void FixedUpdate()
@@ -74,6 +102,16 @@ public class FirstPersonController : MonoBehaviour
         HandleLookingAround();
         HandleBobbing();
         HandleCameraTilt();
+
+        // Smoothly transition vignette intensity based on sprinting state
+        float targetIntensity = isSprinting ? sprintVignetteIntensity : normalVignetteIntensity;
+        vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, targetIntensity, Time.deltaTime * vignetteLerpSpeed);
+
+        // Regenerate stamina when not sprinting
+        if (!isSprinting && currentStamina < maxStamina)
+        {
+            RegenerateStamina();
+        }
     }
 
     void HandleMovement()
@@ -87,6 +125,9 @@ public class FirstPersonController : MonoBehaviour
         Vector3 move = new Vector3(moveDirectionX, 0, moveDirectionZ);
         move = playerCamera.transform.TransformDirection(move); // Make movement relative to camera's facing
         move.y = 0; // Keep movement on the ground plane
+
+        // Check if the player is walking
+        isWalking = move.magnitude > 0 && !isSprinting; // Player is walking if there's movement and not sprinting
 
         // Apply movement using Rigidbody's MovePosition (helps prevent clipping and works with physics)
         Vector3 newPosition = rb.position + move;
@@ -140,7 +181,30 @@ public class FirstPersonController : MonoBehaviour
     void HandleSprinting()
     {
         // Check if the player is sprinting (LeftShift key)
-        isSprinting = Input.GetKey(KeyCode.LeftShift) && !isCrouching;
+        if (Input.GetKey(KeyCode.LeftShift) && isWalking && !isCrouching && currentStamina > 0f)
+        {
+            isSprinting = true;
+            // Deplete stamina while sprinting
+            currentStamina -= staminaDepletionRate * Time.deltaTime;
+            isExhausted = currentStamina <= 0f;
+        }
+        else
+        {
+            isSprinting = false;
+        }
+    }
+
+    void RegenerateStamina()
+    {
+        if (!isSprinting && currentStamina < maxStamina)
+        {
+            // Regenerate stamina over time when not sprinting
+            currentStamina += staminaRegenerationRate * Time.deltaTime;
+            if (currentStamina > maxStamina)
+            {
+                currentStamina = maxStamina; // Ensure it doesn't exceed max stamina
+            }
+        }
     }
 
     void HandleLookingAround()
@@ -157,18 +221,21 @@ public class FirstPersonController : MonoBehaviour
 
     void HandleBobbing()
     {
-        if (isWalking)
+        if (isWalking && !isSprinting || isSprinting) // Bobbing applies to walking and sprinting
         {
-            // Bob the camera up and down while walking
-            timer += Time.deltaTime * bobbingSpeed;
+            // Adjust bobbing speed based on whether the player is sprinting
+            float currentBobbingSpeed = isSprinting ? bobbingSpeed * 2.5f : bobbingSpeed;  // Increase by 1.5x while sprinting
+
+            // Bob the camera up and down while walking or sprinting
+            timer += Time.deltaTime * currentBobbingSpeed;
             float newY = Mathf.Sin(timer) * bobbingAmount;
             float newX = Mathf.Sin(timer * sideBobbingSpeed) * sideBobbingAmount;
 
-            // Double the effect while sprinting
+            // Increase the effect further during sprinting
             if (isSprinting)
             {
-                newY *= 2f;
-                newX *= 2f;
+                newY *= 6f;  // Increased multiplier for stronger bobbing
+                newX *= 6f;  // Increased multiplier for stronger side-bobbing
             }
 
             Vector3 targetPosition = new Vector3(newX, newY, playerCamera.transform.localPosition.z);
@@ -183,11 +250,17 @@ public class FirstPersonController : MonoBehaviour
 
     void HandleCameraTilt()
     {
-        // Only apply the sway effect if the player is walking or sprinting
-        if (isWalking || isSprinting)
+        // Apply the tilt effect if the player is walking or sprinting
+        if (isWalking && !isSprinting || isSprinting)
         {
+            // Define a multiplier to speed up the sway when sprinting
+            float sprintMultiplier = isSprinting ? 2f : 1f;  // Increased multiplier
+
+            // Use a dynamic tilt amount for stronger sway while sprinting
+            float dynamicTiltAmount = isSprinting ? tiltAmount * 3f : tiltAmount;
+
             // Create a smooth back-and-forth sway effect with a sine wave function
-            float sway = Mathf.Sin(Time.time * tiltSpeed) * tiltAmount;
+            float sway = Mathf.Sin(Time.time * tiltSpeed * sprintMultiplier) * dynamicTiltAmount;
 
             // Apply the sway to the camera's local rotation
             currentTilt = Mathf.Lerp(currentTilt, sway, Time.deltaTime * tiltSpeed);
@@ -196,6 +269,13 @@ public class FirstPersonController : MonoBehaviour
         {
             // Smoothly reset the tilt when the player is not moving
             currentTilt = Mathf.Lerp(currentTilt, 0f, Time.deltaTime * tiltSpeed);
+        }
+
+        // Update vignette intensity based on sprinting state
+        if (vignette != null)
+        {
+            float targetVignetteIntensity = isSprinting ? 0.085f : 0.075f;
+            vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, targetVignetteIntensity, Time.deltaTime * 5f); // Smoother lerp speed
         }
 
         // Apply the calculated tilt to the camera
