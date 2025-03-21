@@ -5,11 +5,8 @@ using UnityEngine.Rendering.Universal;
 [RequireComponent(typeof(Rigidbody))]
 public class FirstPersonController : MonoBehaviour
 {
-
-
     private Color normalVignetteColor = Color.black; // Default vignette color
     private Color lowHealthVignetteColor = Color.red; // Vignette color when health is low
-
 
     // Movement speeds
     public float walkSpeed = 3.0f;
@@ -105,13 +102,6 @@ public class FirstPersonController : MonoBehaviour
         playerHealth = GetComponent<PlayerHealth>();
     }
 
-    void FixedUpdate()
-    {
-        // Handle movement and jumping (FixedUpdate is better for physics-based movement)
-        HandleMovement();
-        HandleJumping();
-    }
-
     void Update()
     {
         // Handle input-based actions like crouching, sprinting, and looking around
@@ -120,6 +110,7 @@ public class FirstPersonController : MonoBehaviour
         HandleLookingAround();
         HandleBobbing();
         HandleCameraTilt();
+        HandleJumping();
 
         // Smoothly transition vignette intensity based on sprinting state
         float targetIntensity = isSprinting ? sprintVignetteIntensity : normalVignetteIntensity;
@@ -141,6 +132,12 @@ public class FirstPersonController : MonoBehaviour
         {
             RegenerateStamina();
         }
+    }
+
+    void FixedUpdate()
+    {
+        // Handle movement (FixedUpdate is better for physics-based movement)
+        HandleMovement();
     }
 
     void HandleMovement()
@@ -166,7 +163,7 @@ public class FirstPersonController : MonoBehaviour
     void HandleJumping()
     {
         // Check if the player is grounded
-        bool isGrounded = Physics.Raycast(playerTransform.position, Vector3.down, 1.1f);
+        bool isGrounded = Physics.Raycast(playerTransform.position, Vector3.down, 1.5f);  // Increased raycast distance for better ground detection
 
         if (isGrounded)
         {
@@ -177,8 +174,7 @@ public class FirstPersonController : MonoBehaviour
 
             if (Input.GetKeyDown(KeyCode.Space))
             {
-                // Apply jump force if the player presses Space and is grounded
-                velocityY = jumpForce;
+                velocityY = jumpForce; // Apply jump force immediately
             }
         }
         else
