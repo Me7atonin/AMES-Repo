@@ -7,7 +7,7 @@ public class FirstPersonController : MonoBehaviour
 {
     // Movement speeds
     public float walkSpeed = 3.0f;
-    public float sprintSpeed = 6.0f;
+    public float sprintSpeed = 12.0f;
     public float crouchSpeed = 1.5f;
     public float lookSpeedX = 2.0f;
     public float lookSpeedY = 2.0f;
@@ -17,6 +17,9 @@ public class FirstPersonController : MonoBehaviour
     public float bobbingSpeed = 10.0f;
     public float sideBobbingAmount = 0.025f;
     public float sideBobbingSpeed = 1.5f;
+
+    public float swayAmount = 0.02f;   // Amount of sway
+    public float swaySpeed = 0.5f;     // Speed of sway
 
     // Camera tilt
     public float tiltAmount = 2.0f;
@@ -50,6 +53,8 @@ public class FirstPersonController : MonoBehaviour
     private bool isCrouching = false;
     private bool isJumping = false;
     private bool isWalking = false;
+
+    private Vector3 originalCameraPosition; // To store the initial camera position
 
     private float currentTilt = 0.0f;
     private float targetTilt = 0.0f;
@@ -280,5 +285,24 @@ public class FirstPersonController : MonoBehaviour
 
         // Apply the calculated tilt to the camera
         playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, currentTilt);
+    }
+    void HandleIdleSway()
+    {
+        if (!isWalking && !isSprinting) // When idle
+        {
+            // Idle sway should only happen when the player is not moving
+            // Swaying motion (randomized direction for more natural feel)
+            float swayX = Mathf.Sin(Time.time * swaySpeed) * swayAmount;
+            float swayY = Mathf.Cos(Time.time * swaySpeed) * swayAmount;
+
+            // Apply the sway effect smoothly
+            Vector3 swayPosition = originalCameraPosition + new Vector3(swayX, swayY, 0);
+            playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, swayPosition, Time.deltaTime * 2f);
+        }
+        else
+        {
+            // Reset camera position when the player starts moving
+            playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, originalCameraPosition, Time.deltaTime * 5f);
+        }
     }
 }
