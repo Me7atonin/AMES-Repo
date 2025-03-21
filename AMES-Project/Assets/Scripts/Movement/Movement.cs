@@ -7,7 +7,7 @@ public class FirstPersonController : MonoBehaviour
 {
     // Movement speeds
     public float walkSpeed = 3.0f;
-    public float sprintSpeed = 6.0f;
+    public float sprintSpeed = 12.0f;
     public float crouchSpeed = 1.5f;
     public float lookSpeedX = 2.0f;
     public float lookSpeedY = 2.0f;
