@@ -5,9 +5,16 @@ using UnityEngine.Rendering.Universal;
 [RequireComponent(typeof(Rigidbody))]
 public class FirstPersonController : MonoBehaviour
 {
+
+
+    private Color normalVignetteColor = Color.black; // Default vignette color
+    private Color lowHealthVignetteColor = Color.red; // Vignette color when health is low
+
+
     // Movement speeds
     public float walkSpeed = 3.0f;
-    public float sprintSpeed = 12.0f;
+    public float sprintSpeed = 12.0f;   // Normal sprint speed
+    public float reducedSprintSpeed = 6.0f;  // Reduced sprint speed when health is low (<=20)
     public float crouchSpeed = 1.5f;
     public float lookSpeedX = 2.0f;
     public float lookSpeedY = 2.0f;
@@ -66,6 +73,9 @@ public class FirstPersonController : MonoBehaviour
     private float normalVignetteIntensity = 0.275f; // Normal intensity when not sprinting
     private float vignetteLerpSpeed = 5.0f; // Speed of transitioning vignette intensity
 
+    // Player health reference
+    private PlayerHealth playerHealth;
+
     void Start()
     {
         playerCamera = GetComponentInChildren<Camera>();
@@ -90,6 +100,9 @@ public class FirstPersonController : MonoBehaviour
         {
             Debug.LogWarning("PostProcessVolume not found in the scene.");
         }
+
+        // Get the PlayerHealth script reference
+        playerHealth = GetComponent<PlayerHealth>();
     }
 
     void FixedUpdate()
@@ -112,6 +125,17 @@ public class FirstPersonController : MonoBehaviour
         float targetIntensity = isSprinting ? sprintVignetteIntensity : normalVignetteIntensity;
         vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, targetIntensity, Time.deltaTime * vignetteLerpSpeed);
 
+        if (playerHealth.health <= 20)
+        {
+            vignette.color.value = Color.Lerp(vignette.color.value, lowHealthVignetteColor, Time.deltaTime * vignetteLerpSpeed);
+            vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, 0.45f, Time.deltaTime * vignetteLerpSpeed); // Increase intensity
+        }
+        else
+        {
+            vignette.color.value = Color.Lerp(vignette.color.value, normalVignetteColor, Time.deltaTime * vignetteLerpSpeed);
+            vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, normalVignetteIntensity, Time.deltaTime * vignetteLerpSpeed); // Reset intensity
+        }
+
         // Regenerate stamina when not sprinting
         if (!isSprinting && currentStamina < maxStamina)
         {
@@ -122,7 +146,7 @@ public class FirstPersonController : MonoBehaviour
     void HandleMovement()
     {
         // Get movement input (WASD or arrow keys)
-        float currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
+        float currentSpeed = isSprinting ? GetSprintSpeed() : walkSpeed; // Adjust sprint speed based on health
         float moveDirectionX = Input.GetAxis("Horizontal") * currentSpeed * Time.deltaTime;
         float moveDirectionZ = Input.GetAxis("Vertical") * currentSpeed * Time.deltaTime;
 
@@ -276,33 +300,13 @@ public class FirstPersonController : MonoBehaviour
             currentTilt = Mathf.Lerp(currentTilt, 0f, Time.deltaTime * tiltSpeed);
         }
 
-        // Update vignette intensity based on sprinting state
-        if (vignette != null)
-        {
-            float targetVignetteIntensity = isSprinting ? 0.085f : 0.075f;
-            vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, targetVignetteIntensity, Time.deltaTime * 5f); // Smoother lerp speed
-        }
-
         // Apply the calculated tilt to the camera
         playerCamera.transform.localRotation = Quaternion.Euler(rotationX, 0, currentTilt);
     }
-    void HandleIdleSway()
-    {
-        if (!isWalking && !isSprinting) // When idle
-        {
-            // Idle sway should only happen when the player is not moving
-            // Swaying motion (randomized direction for more natural feel)
-            float swayX = Mathf.Sin(Time.time * swaySpeed) * swayAmount;
-            float swayY = Mathf.Cos(Time.time * swaySpeed) * swayAmount;
 
-            // Apply the sway effect smoothly
-            Vector3 swayPosition = originalCameraPosition + new Vector3(swayX, swayY, 0);
-            playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, swayPosition, Time.deltaTime * 2f);
-        }
-        else
-        {
-            // Reset camera position when the player starts moving
-            playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, originalCameraPosition, Time.deltaTime * 5f);
-        }
+    // Function to return the appropriate sprint speed based on health
+    float GetSprintSpeed()
+    {
+        return playerHealth.health <= 20 ? reducedSprintSpeed : sprintSpeed;
     }
 }
