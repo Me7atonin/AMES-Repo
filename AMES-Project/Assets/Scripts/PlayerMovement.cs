@@ -3,10 +3,11 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 [RequireComponent(typeof(Rigidbody))]
-public class FirstPersonController : MonoBehaviour
+public class PlayerMovement : MonoBehaviour
 {
     private Color normalVignetteColor = Color.black; // Default vignette color
     private Color lowHealthVignetteColor = Color.red; // Vignette color when health is low
+
 
     // Movement speeds
     public float walkSpeed = 3.0f;
@@ -53,10 +54,13 @@ public class FirstPersonController : MonoBehaviour
     private float rotationX = 0;
     private float timer = 0f;
 
-    private bool isSprinting = false;
-    private bool isCrouching = false;
+    public bool isSprinting = false;
+    public bool isCrouching = false;
     private bool isJumping = false;
     private bool isWalking = false;
+
+    public bool IsCrouching { get { return isCrouching; } }
+    public bool IsSprinting { get { return isSprinting; } }
 
     private Vector3 originalCameraPosition; // To store the initial camera position
 
