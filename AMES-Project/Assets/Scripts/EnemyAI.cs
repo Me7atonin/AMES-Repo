@@ -1,185 +1,193 @@
 using UnityEngine;
 using UnityEngine.AI;
 
-public class EnemyAI : MonoBehaviour
+public class AggressiveEnemyAI : MonoBehaviour
 {
     [Header("References")]
-    public Transform[] patrolPoints;
     public Transform player;
-    private PlayerMovement playerMovement;
     private NavMeshAgent agent;
 
-    [Header("Vision Settings")]
-    public float viewDistance = 10f;
-    public float viewAngle = 180f;
-    public LayerMask obstructionMask;
+    [Header("Collision Settings")]
+    public LayerMask wallMask;
 
-    [Header("Detection Settings")]
-    public float memoryTime = 5f;
+    [Header("Stats")]
+    public float detectionRange = 25f;
+    public float fieldOfView = 140f;
+    public float chaseSpeed = 6f;
+    public float memoryDuration = 3f;
+    public LayerMask obstacleMask;
+
+    [Header("Player Above Settings")]
+    public float elevationThreshold = 2f; // How far above the enemy the player has to be
+    public float circleRadius = 2f;
+    public float circleSpeed = 3f;
+
+    [Header("Wandering Settings")]
+    public float wanderRadius = 10f; // Radius within which it can wander
+    public float wanderCooldown = 5f; // Time before it picks a new random target
+    private float wanderTimer;
+    private Vector3 wanderTarget;
+    private float wanderTimerThreshold = 3f; // Time threshold to stop wandering when stuck
+
     private float memoryTimer;
-    private Vector3 lastKnownPosition;
     private bool playerInSight;
+    private Vector3 lastKnownPlayerPosition;
+    private float circleAngle;
 
-    [Header("Adaptive Behavior Settings")]
-    public int losesBeforeBehaviorChange = 3;
-    private int timesLostPlayerHere = 0;
-
-    [Header("Search Settings")]
-    public float searchDuration = 3f;
-    private float searchTimer;
-    private bool searching;
-
-    private int currentPatrolIndex;
-
-    private void Start()
+    void Start()
     {
         agent = GetComponent<NavMeshAgent>();
-        playerMovement = player.GetComponent<PlayerMovement>();
-        GoToNextPatrolPoint();
+        agent.avoidancePriority = 50; // Avoid collisions with other agents
+        agent.radius = 1.5f; // Adjust to match the size of the enemy
+        agent.height = 2.0f; // Adjust based on the enemy's height
+        agent.stoppingDistance = 0.2f; // Ensure agent doesn't stop too far from the target
+        agent.angularSpeed = 500f; // Allows smoother turning
+        agent.acceleration = 8f; // Allows faster acceleration
+
+        wanderTimer = wanderCooldown; // Initialize wander timer
+        wanderTarget = transform.position; // Start from current position
     }
 
-    private void Update()
+    void Update()
     {
-        if (CanSeePlayer())
+        // Check if the player is directly above the enemy or near the enemy
+        if (PlayerIsOnHead())
         {
-            playerInSight = true;
-            lastKnownPosition = player.position;
-            memoryTimer = memoryTime;
-
-            ChasePlayer();
+            SpinAroundPlayer();
+            return;
         }
-        else if (playerInSight)
+
+        if (PlayerIsAbove())
+        {
+            // If the player is above but not directly on the head, move beneath them
+            MoveBeneathPlayer();
+            return;
+        }
+
+        playerInSight = CanSeePlayer();
+
+        if (playerInSight)
+        {
+            lastKnownPlayerPosition = player.position;
+            memoryTimer = memoryDuration;
+            Chase(player.position);
+        }
+        else if (memoryTimer > 0)
         {
             memoryTimer -= Time.deltaTime;
-
-            if (memoryTimer > 0)
-            {
-                ChasePlayer();
-            }
-            else
-            {
-                playerInSight = false;
-                StartSearching();
-            }
-        }
-        else if (searching)
-        {
-            SearchForPlayer();
+            Chase(lastKnownPlayerPosition);
         }
         else
         {
-            Patrol();
+            // Handle wandering behavior with a smoother approach
+            wanderTimer -= Time.deltaTime;
+            if (wanderTimer <= 0)
+            {
+                WanderRandomly(); // Wander randomly within the specified radius
+                wanderTimer = wanderCooldown; // Reset wander timer
+            }
+            else
+            {
+                // If the enemy is stuck for too long, force it to wander in a new direction
+                if (wanderTimer <= wanderTimerThreshold)
+                {
+                    WanderRandomly();
+                }
+            }
+        }
+    }
+    void LateUpdate()
+    {
+        if (Physics.CheckSphere(transform.position + transform.forward * 0.5f, 0.4f, wallMask))
+        {
+            agent.isStopped = true;
+        }
+        else
+        {
+            agent.isStopped = false;
         }
     }
 
-    private bool CanSeePlayer()
+    bool CanSeePlayer()
     {
-        Vector3 directionToPlayer = (player.position - transform.position).normalized;
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
+        Vector3 dirToPlayer = player.position - transform.position;
+        float distToPlayer = dirToPlayer.magnitude;
+        float angle = Vector3.Angle(transform.forward, dirToPlayer);
 
-        if (distanceToPlayer < viewDistance)
+        if (distToPlayer <= detectionRange && angle <= fieldOfView * 0.5f)
         {
-            float angleBetween = Vector3.Angle(transform.forward, directionToPlayer);
-
-            if (angleBetween < viewAngle / 2f)
+            if (!Physics.Raycast(transform.position + Vector3.up, dirToPlayer.normalized, distToPlayer, obstacleMask))
             {
-                // Raycast from enemy eye level
-                if (!Physics.Raycast(transform.position + Vector3.up, directionToPlayer, distanceToPlayer, obstructionMask))
-                {
-                    // Modify detection based on player state
-                    if (playerMovement.IsCrouching)
-                        return distanceToPlayer < viewDistance * 0.5f;
-
-                    if (playerMovement.IsSprinting)
-                        return distanceToPlayer < viewDistance * 1.2f;
-
-                    return true;
-                }
+                return true;
             }
         }
         return false;
     }
 
-    private void ChasePlayer()
+    void Chase(Vector3 destination)
     {
-        searching = false;
-        agent.SetDestination(player.position);
+        agent.speed = chaseSpeed;
+        agent.SetDestination(destination);
     }
 
-    private void StartSearching()
+    void WanderRandomly()
     {
-        // Check if the AI lost the player in the same spot
-        if (Vector3.Distance(transform.position, lastKnownPosition) < 1f)
-        {
-            timesLostPlayerHere++;
+        agent.speed = chaseSpeed * 0.5f; // Slow down while wandering
 
-            if (timesLostPlayerHere >= losesBeforeBehaviorChange)
-            {
-                DoUnpredictableBehavior();
-                timesLostPlayerHere = 0; // Reset counter after behavior change
-                return; // Exit early so it doesn't do regular searching
-            }
-        }
-        else
+        // If the wander target is too close to the current position, pick a new target
+        if (Vector3.Distance(transform.position, wanderTarget) < 2f)
         {
-            timesLostPlayerHere = 0; // Reset if different location
+            // Pick a random position within the wander radius
+            Vector3 randomDirection = Random.insideUnitSphere * wanderRadius;
+            randomDirection += transform.position;
+            NavMeshHit hit;
+            NavMesh.SamplePosition(randomDirection, out hit, wanderRadius, NavMesh.AllAreas);
+
+            wanderTarget = hit.position; // Set new wander target
         }
 
-        searching = true;
-        searchTimer = searchDuration;
-        agent.SetDestination(lastKnownPosition);
+        agent.SetDestination(wanderTarget);
     }
 
-    private void SearchForPlayer()
+    bool PlayerIsOnHead()
     {
-        if (Vector3.Distance(transform.position, lastKnownPosition) < 1f)
-        {
-            searchTimer -= Time.deltaTime;
-
-            if (searchTimer <= 0)
-            {
-                searching = false;
-                GoToNextPatrolPoint();
-            }
-        }
+        float verticalOffset = player.position.y - transform.position.y;
+        float horizontalDistance = Vector3.Distance(new Vector3(player.position.x, 0, player.position.z), new Vector3(transform.position.x, 0, transform.position.z));
+        return verticalOffset > elevationThreshold && horizontalDistance < 1.5f;
     }
 
-    private void Patrol()
+    bool PlayerIsAbove()
     {
-        if (!agent.pathPending && agent.remainingDistance < 0.5f)
-        {
-            GoToNextPatrolPoint();
-        }
+        float verticalOffset = player.position.y - transform.position.y;
+        float horizontalDistance = Vector3.Distance(new Vector3(player.position.x, 0, player.position.z), new Vector3(transform.position.x, 0, transform.position.z));
+        return verticalOffset > elevationThreshold && horizontalDistance < 3f; // If player is close but not directly above
     }
 
-    private void GoToNextPatrolPoint()
+    void SpinAroundPlayer()
     {
-        if (patrolPoints.Length == 0) return;
+        agent.speed = circleSpeed;
 
-        agent.SetDestination(patrolPoints[currentPatrolIndex].position);
-        currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.Length;
+        // Smooth orbit behavior around the player
+        circleAngle += Time.deltaTime * circleSpeed;
+        Vector3 offset = new Vector3(Mathf.Cos(circleAngle), 0, Mathf.Sin(circleAngle)) * circleRadius;
+        Vector3 circleTarget = new Vector3(player.position.x, transform.position.y, player.position.z) + offset;
+
+        agent.SetDestination(circleTarget);
     }
-    private void DoUnpredictableBehavior()
+
+    void MoveBeneathPlayer()
     {
-        searching = false;
+        // Try to move beneath the player if they are above the enemy but not directly on its head
+        Vector3 targetPosition = new Vector3(player.position.x, transform.position.y, player.position.z);
+        agent.SetDestination(targetPosition);
+        agent.speed = chaseSpeed; // Move at full speed to get beneath the player
+    }
 
-        // 50/50 chance between two behaviors
-        if (Random.value > 0.5f)
-        {
-            // Search a random patrol point (surprise!)
-            int randomIndex = Random.Range(0, patrolPoints.Length);
-            agent.SetDestination(patrolPoints[randomIndex].position);
-        }
-        else
-        {
-            // Search in a random position near last known
-            Vector3 randomOffset = new Vector3(
-                Random.Range(-5f, 5f),
-                0,
-                Random.Range(-5f, 5f)
-            );
-
-            agent.SetDestination(lastKnownPosition + randomOffset);
-        }
+    private void OnDrawGizmosSelected()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, detectionRange);
+        Gizmos.color = Color.green;
+        Gizmos.DrawWireSphere(transform.position, wanderRadius);
     }
 }

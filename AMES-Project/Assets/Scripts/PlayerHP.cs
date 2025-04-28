@@ -1,79 +1,135 @@
 using UnityEngine;
-using System.Collections;  // Add this to allow IEnumerator and coroutines
+using UnityEngine.Rendering;  // For Volume and PostProcessing
+using System.Collections;
+using UnityEngine.Rendering.Universal;  // For IEnumerator and coroutines
 
 public class PlayerHealth : MonoBehaviour
 {
-    public float health = 100f;
-    public float maxHealth = 100f;
-    private bool isCollidingWithEnemy = false;
+    [Header("Health Settings")]
+    public float health = 10f;
+    public float maxHealth = 10f;
+    public float lowHealthThreshold = 3f; // Below this = Low Health state
 
-    // Regen variables
-    public float regenRate = 2f; // Health regenerated per second
-    private float timeSinceDamage = 0f; // Time since last damage was taken
-    public float regenDelay = 5f; // Time (in seconds) before regen starts after taking damage
+    [Header("Regen Settings")]
+    public float regenRate = 1f; // Health regenerated per second
+    public float regenDelay = 20f; // Time before regen starts after taking damage
+
+    [Header("Vignette Settings")]
+    public Volume postProcessVolume;  // Reference to the Post Process Volume
+    private Vignette vignette;         // Vignette effect from PostProcessing
+    private float transitionSpeed = 5f;  // Speed at which vignette intensity changes
+    private float maxVignetteIntensity = 0.5f;  // Max intensity of vignette
+
+    private float timeSinceDamage = 0f;
+    private bool isCollidingWithEnemy = false;
+    private Coroutine damageCoroutine; // Hold reference to coroutine for stopping it
+
+    [Header("Damage Cooldown")]
+    public float damageCooldown = 1.5f; // Cooldown in seconds
+    private float lastDamageTime = -Mathf.Infinity; // Timestamp of last damage taken
+
+    void Start()
+    {
+        // Fetch the Vignette effect from the PostProcess Volume
+        if (postProcessVolume.profile.TryGet<Vignette>(out vignette))
+        {
+            Debug.Log("Vignette effect found.");
+            vignette.intensity.value = 0f;  // Start with no vignette effect
+        }
+        else
+        {
+            Debug.LogError("Vignette effect not found in the Post Process Profile.");
+        }
+    }
 
     void Update()
     {
         if (health <= 0)
         {
-            // Handle player death (e.g., trigger death animation, game over screen)
+            // Handle player death
             Debug.Log("Player is dead.");
         }
 
-        // If the player hasn't taken damage for a while, start regenerating health
+        // Update vignette intensity based on health
+        UpdateVignetteIntensity();
+
         if (timeSinceDamage >= regenDelay)
         {
             RegenerateHealth();
         }
 
-        // Keep track of time since the last damage
         timeSinceDamage += Time.deltaTime;
     }
 
-    // Take damage from the enemy
     public void TakeDamage(float damageAmount)
     {
+        if (Time.time - lastDamageTime < damageCooldown)
+        {
+            return; // On cooldown, skip
+        }
+
+        lastDamageTime = Time.time; // Update last damage timestamp
         health -= damageAmount;
-        health = Mathf.Clamp(health, 0, maxHealth);  // Prevent health from going below 0
-        timeSinceDamage = 0f; // Reset the timer when damage is taken
+        health = Mathf.Clamp(health, 0, maxHealth);
+        timeSinceDamage = 0f;
         Debug.Log("Player took damage. Current health: " + health);
     }
-
-    // Handle collision with the enemy
     void OnCollisionEnter(Collision collision)
     {
         if (collision.gameObject.CompareTag("Enemy"))
         {
-            isCollidingWithEnemy = true;
-            StartCoroutine(ApplyDamageOverTime(collision.gameObject.GetComponent<Enemy>().damageAmount));
+            if (damageCoroutine == null)
+            {
+                damageCoroutine = StartCoroutine(ApplyDamageOverTime(collision.gameObject.GetComponent<Enemy>().damageAmount));
+            }
         }
     }
 
     void OnCollisionExit(Collision collision)
     {
-        if (collision.gameObject.CompareTag("Enemy"))
+        if (collision.gameObject.CompareTag("Enemy") && damageCoroutine != null)
         {
-            isCollidingWithEnemy = false;
+            StopCoroutine(damageCoroutine);
+            damageCoroutine = null;
         }
     }
 
     private IEnumerator ApplyDamageOverTime(float damageAmount)
     {
-        while (isCollidingWithEnemy)
+        while (true)
         {
-            TakeDamage(damageAmount); // Apply damage to the player
-            yield return new WaitForSeconds(2f); // Apply damage every 2 seconds while colliding
+            TakeDamage(damageAmount);
+            yield return new WaitForSeconds(0.25f); // Frequent check, but cooldown guards it
         }
     }
 
-    // Slow health regeneration after not taking damage for a while
     void RegenerateHealth()
     {
         if (health < maxHealth)
         {
-            health += regenRate * Time.deltaTime; // Regenerate health over time
-            health = Mathf.Clamp(health, 0, maxHealth); // Ensure health doesn't exceed max
+            health += regenRate * Time.deltaTime;
+            health = Mathf.Clamp(health, 0, maxHealth);
             Debug.Log("Player Health: " + health);
+        }
+    }
+
+    // Public check for low health
+    public bool IsLowHealth()
+    {
+        return health <= lowHealthThreshold;
+    }
+
+    // Adjust vignette intensity based on health
+    void UpdateVignetteIntensity()
+    {
+        if (vignette != null)
+        {
+            float healthFactor = Mathf.Clamp01((maxHealth - health) / maxHealth);  // Increases as health decreases
+            vignette.intensity.value = Mathf.Lerp(vignette.intensity.value, healthFactor * maxVignetteIntensity, Time.deltaTime * transitionSpeed);
+        }
+        else
+        {
+            Debug.LogError("Vignette is not initialized properly.");
         }
     }
 }
