@@ -13,18 +13,16 @@ public class EnemyMovement : MonoBehaviour
     [Header("Patrol Settings")]
     public Transform[] patrolPoints;
     private int currentPatrolIndex = 0;
-    private bool isPatrolling = true;
 
     [Header("Vision Settings")]
     public float sightRange = 10f;
     public float fieldOfView = 120f;
     public float chaseSpeed = 5f;
     public float patrolSpeed = 2f;
-    public float memoryDuration = 5f;
-    private float memoryTimer = 0f;
 
     private bool playerInSight;
     private Vector3 lastKnownPlayerPosition;
+    private bool isPatrolling = true;
 
     private void Start()
     {
@@ -42,11 +40,7 @@ public class EnemyMovement : MonoBehaviour
         {
             ChasePlayer();
         }
-        else if (memoryTimer > 0)
-        {
-            SearchLastKnownPosition();
-        }
-        else if (isPatrolling)
+        else if (!playerInSight && isPatrolling)
         {
             Patrol();
         }
@@ -67,14 +61,9 @@ public class EnemyMovement : MonoBehaviour
                 if (hit.transform.CompareTag("Player"))
                 {
                     playerInSight = true;
-                    lastKnownPlayerPosition = player.position;
-                    memoryTimer = memoryDuration;
+                    lastKnownPlayerPosition = player.position; // Optional, in case you want to use it later.
                 }
             }
-        }
-        else if (memoryTimer > 0)
-        {
-            memoryTimer -= Time.deltaTime;
         }
     }
 
@@ -91,26 +80,9 @@ public class EnemyMovement : MonoBehaviour
 
     private void ChasePlayer()
     {
-        isPatrolling = false;
+        isPatrolling = false; // Stop patrolling once we start chasing.
         agent.speed = chaseSpeed;
         agent.SetDestination(player.position);
-    }
-
-    private void SearchLastKnownPosition()
-    {
-        agent.speed = patrolSpeed;
-        agent.SetDestination(lastKnownPlayerPosition);
-
-        if (!agent.pathPending && agent.remainingDistance < 0.5f)
-        {
-            isPatrolling = true;
-        }
-    }
-
-    // Optional: Extend this for unique enemies
-    public virtual void OnPlayerCaught()
-    {
-        Debug.Log("Player caught! Override this in child classes.");
     }
 
     private void OnDrawGizmosSelected()
