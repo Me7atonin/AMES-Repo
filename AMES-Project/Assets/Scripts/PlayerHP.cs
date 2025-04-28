@@ -47,7 +47,7 @@ public class PlayerHealth : MonoBehaviour
         if (health <= 0)
         {
             // Handle player death
-            Debug.Log("Player is dead.");
+            Debug.Log("You is dead.");
         }
 
         // Update vignette intensity based on health
