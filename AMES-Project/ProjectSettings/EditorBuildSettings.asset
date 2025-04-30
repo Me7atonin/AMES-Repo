@@ -4,34 +4,5 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes:
-  - enabled: 1
-    path: Assets/Scenes/Menu.unity
-    guid: d955ab7bcebf3404ca48a31565e8cab3
-  - enabled: 1
-    path: Assets/Scenes/open world.unity
-    guid: 06a7b0f47fa114a4cb63c990eee4790c
-  - enabled: 1
-    path: Assets/Scenes/Level 1 School.unity
-    guid: a3a6cb057b75562438427cdcbbbeddb1
-  - enabled: 1
-    path: Assets/Scenes/Level 1 Apartment.unity
-    guid: 0ef5c0ec5b013eb44bacc6b7fae87fb0
-  - enabled: 1
-    path: Assets/Scenes/Level 2 church.unity
-    guid: 99c9720ab356a0642a771bea13969a05
-<<<<<<< Updated upstream
-  - enabled: 1
-    path: Assets/Scenes/Level 3.unity
-    guid: 39e6f03297c81fb47908043ca5d2a09e
-  - enabled: 1
-    path: Assets/Scenes/Charlie Testing Scene.unity
-    guid: 7797240c8decd9a40808f85910ea7c38
+  m_Scenes: []
   m_configObjects: {}
-=======
-  m_configObjects:
-    com.unity.input.settings: {fileID: 11400000, guid: 7515cf06e25349c4c8de17f35632b89d,
-      type: 2}
-    com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 85c93ab2d21d2f24b9aa8c199abee0f3,
-      type: 3}
->>>>>>> Stashed changes
