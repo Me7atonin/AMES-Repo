@@ -1028,7 +1028,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fcfa92186cde96e4e808b447910e2a94, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  damageAmount: 2
+  damageAmount: 10
   damageInterval: 1
 --- !u!54 &1412228395
 Rigidbody:
@@ -1072,10 +1072,10 @@ MonoBehaviour:
   player: {fileID: 1966078416}
   wallMask:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 8
   detectionRange: 25
   fieldOfView: 360
-  chaseSpeed: 7
+  chaseSpeed: 9
   memoryDuration: 3
   obstacleMask:
     serializedVersion: 2
