@@ -1,96 +1,145 @@
 using UnityEngine;
 using System.Collections;
 
-public class JumpyEnemy : MonoBehaviour
+public class JumperEnemy : MonoBehaviour
 {
     [Header("References")]
     public Transform player;
     private Rigidbody rb;
-    private Animator animator;
 
     [Header("Jump Settings")]
-    public float jumpForce = 12f;
+    public float forwardForce = 10f;
+    public float upwardForce = 15f;
+    public float detectionRange = 20f;
     public float jumpCooldown = 3f;
-    public float detectionRange = 15f;
-    public float lungeHeightOffset = 2f;
 
-    [Header("Ground Detection")]
+    [Header("Ground Check")]
     public LayerMask groundMask;
-    public float groundCheckDistance = 1.1f;
+    public float groundCheckRadius = 0.3f;
+    public Transform groundCheckPoint;
 
-    private float cooldownTimer;
+    [Header("Drag Settings")]
+    public float landingDrag = 10f;
+    public float dragResetDelay = 0.2f;
+
+    [Header("Teleport Settings")]
+    public float teleportCooldown = 5f;
+    public float teleportRadius = 20f;
+    public float teleportDelay = 1f;
+    public LayerMask teleportGroundMask;
+
+    private float lastTeleportTime = -Mathf.Infinity;
+    private float initialDrag;
     private bool isGrounded;
+    private bool wasGrounded;
+    private bool isPouncing = false;
+    private float cooldownTimer = 0f;
 
-    void Start()
+    void Awake()
     {
         rb = GetComponent<Rigidbody>();
-        animator = GetComponent<Animator>();
-
-        // Ensure rigidbody settings are valid
-        rb.useGravity = true;
-        rb.isKinematic = false;
-        rb.constraints = RigidbodyConstraints.None;
-
-        cooldownTimer = jumpCooldown;
+        initialDrag = rb.drag;
+        LockRotation();
     }
 
     void Update()
     {
         cooldownTimer -= Time.deltaTime;
 
-        // Check if grounded using raycast
-        isGrounded = Physics.Raycast(transform.position, Vector3.down, groundCheckDistance, groundMask);
-
-        float distanceToPlayer = Vector3.Distance(transform.position, player.position);
-
-        if (cooldownTimer <= 0 && isGrounded && distanceToPlayer <= detectionRange)
+        if (cooldownTimer <= 0f && isGrounded && PlayerInRange())
         {
-            LungeAtPlayer();
+            JumpAtPlayer();
             cooldownTimer = jumpCooldown;
         }
     }
 
-    void LungeAtPlayer()
+    void FixedUpdate()
+    {
+        wasGrounded = isGrounded;
+        CheckGrounded();
+
+        if (isPouncing && isGrounded && !wasGrounded)
+        {
+            rb.velocity = new Vector3(0f, rb.velocity.y, 0f);
+            rb.drag = landingDrag;
+            StartCoroutine(ResetDragAfterDelay());
+            isPouncing = false;
+        }
+
+        if (!PlayerInRange() && isGrounded && Time.time - lastTeleportTime > teleportCooldown)
+        {
+            StartCoroutine(TeleportAfterDelay());
+            lastTeleportTime = Time.time;
+        }
+    }
+
+    void CheckGrounded()
+    {
+        isGrounded = Physics.CheckSphere(groundCheckPoint.position, groundCheckRadius, groundMask);
+    }
+
+    bool PlayerInRange()
+    {
+        return Vector3.Distance(transform.position, player.position) <= detectionRange;
+    }
+
+    void JumpAtPlayer()
     {
         Vector3 directionToPlayer = (player.position - transform.position).normalized;
         directionToPlayer.y = 0f;
 
-        // Calculate boosted lunge
-        float boostedHorizontalForce = jumpForce * 1.5f;
-        float boostedVerticalForce = jumpForce + (lungeHeightOffset * 2f);
-
-        Vector3 lunge = directionToPlayer * boostedHorizontalForce + Vector3.up * boostedVerticalForce;
-
-        // Stop current velocity
-        rb.velocity = Vector3.zero;
-
-        // Face the player
         transform.LookAt(new Vector3(player.position.x, transform.position.y, player.position.z));
 
-        // Trigger animation
-        if (animator)
-            animator.SetTrigger("Lunge");
+        Vector3 force = directionToPlayer * forwardForce + Vector3.up * upwardForce;
 
-        // Apply force after a short delay to sync with physics update
-        StartCoroutine(DelayedJump(lunge));
+        rb.velocity = Vector3.zero;
+        rb.AddForce(force, ForceMode.Impulse);
+
+        isPouncing = true;
     }
 
-    IEnumerator DelayedJump(Vector3 force)
+    IEnumerator ResetDragAfterDelay()
     {
-        yield return new WaitForFixedUpdate();
+        yield return new WaitForSeconds(dragResetDelay);
+        rb.drag = initialDrag;
+    }
 
-        // Apply lunge force directly as velocity
-        rb.velocity = force;
+    IEnumerator TeleportAfterDelay()
+    {
+        yield return new WaitForSeconds(teleportDelay);
 
-        Debug.Log("Lunge Force Applied: " + force);
-        Debug.Log("Rigidbody Velocity After Lunge: " + rb.velocity);
+        for (int i = 0; i < 10; i++)
+        {
+            Vector3 randomOffset = Random.insideUnitSphere * teleportRadius;
+            randomOffset.y = 10f;
+            Vector3 targetPos = transform.position + randomOffset;
+
+            if (Physics.Raycast(targetPos, Vector3.down, out RaycastHit hit, 20f, teleportGroundMask))
+            {
+                transform.position = hit.point + Vector3.up * 1f;
+                rb.velocity = Vector3.zero;
+                break;
+            }
+        }
+    }
+
+    void LockRotation()
+    {
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
     }
 
     void OnDrawGizmosSelected()
     {
+        if (groundCheckPoint != null)
+        {
+            Gizmos.color = Color.green;
+            Gizmos.DrawWireSphere(groundCheckPoint.position, groundCheckRadius);
+        }
+
         Gizmos.color = Color.red;
         Gizmos.DrawWireSphere(transform.position, detectionRange);
-        Gizmos.color = Color.green;
-        Gizmos.DrawRay(transform.position, Vector3.down * groundCheckDistance);
+
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, teleportRadius);
     }
 }
