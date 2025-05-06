@@ -6,29 +6,44 @@ using UnityEngine.SceneManagement;
 
 public class TestPauseMenu : MonoBehaviour
 {
+    // Input Action for Pause
+    private InputAction pauseAction;
 
     // Use this for initialization
+    void Awake()
+    {
+        // Create a new Input Action map (in this case, a simple Pause action)
+        var playerInputActions = new InputActionMap("Player");
+
+        // Set up the action for the "Pause" button (Escape key)
+        pauseAction = playerInputActions.AddAction("Pause", binding: "<Keyboard>/escape");
+
+        // Enable the action map
+        playerInputActions.Enable();
+    }
+
     void Start()
     {
         GetComponent<Canvas>().enabled = false;
     }
 
-    // Update is called once per frame
     void Update()
     {
-
-        if (Input.GetKeyDown(KeyCode.Escape) && Time.timeScale == 1)
+        // Check if the pause action was triggered
+        if (pauseAction.triggered)
         {
-            Time.timeScale = 0;
-            GetComponent<Canvas>().enabled = true;
-            Cursor.lockState = CursorLockMode.Confined;
+            if (Time.timeScale == 1)
+            {
+                Time.timeScale = 0;
+                GetComponent<Canvas>().enabled = true;
+                Cursor.lockState = CursorLockMode.Confined;
+            }
+            else
+            {
+                Resume();
+                Cursor.lockState = CursorLockMode.Locked;
+            }
         }
-        else if (Input.GetKeyDown(KeyCode.Escape) && Time.timeScale == 0)
-        {
-            Resume();
-            Cursor.lockState = CursorLockMode.Locked;
-        }
-
     }
 
     public void Resume()

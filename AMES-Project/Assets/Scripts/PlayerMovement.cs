@@ -17,7 +17,7 @@ using UnityEngine.InputSystem.Utilities;
 
 namespace PlayerMovement
 {
-    public partial class @PlayerMovement : IInputActionCollection2, IDisposable
+    public partial class @PlayerMovement: IInputActionCollection2, IDisposable
     {
         public InputActionAsset asset { get; }
         public @PlayerMovement()
@@ -78,6 +78,15 @@ namespace PlayerMovement
                     ""name"": ""Noclip"",
                     ""type"": ""Button"",
                     ""id"": ""8be7e68b-940f-4f3a-8016-7944d5a25870"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""Pause"",
+                    ""type"": ""Button"",
+                    ""id"": ""aaba8b8a-399e-4fdf-8bb9-38ac4b917b98"",
                     ""expectedControlType"": """",
                     ""processors"": """",
                     ""interactions"": """",
@@ -194,6 +203,17 @@ namespace PlayerMovement
                     ""action"": ""Noclip"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""e15c4951-26bb-4fd1-8fe8-842a577f59ac"",
+                    ""path"": ""<Keyboard>/escape"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Pause"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -208,6 +228,7 @@ namespace PlayerMovement
             m_player_Crouch = m_player.FindAction("Crouch", throwIfNotFound: true);
             m_player_Look = m_player.FindAction("Look", throwIfNotFound: true);
             m_player_Noclip = m_player.FindAction("Noclip", throwIfNotFound: true);
+            m_player_Pause = m_player.FindAction("Pause", throwIfNotFound: true);
         }
 
         ~@PlayerMovement()
@@ -280,6 +301,7 @@ namespace PlayerMovement
         private readonly InputAction m_player_Crouch;
         private readonly InputAction m_player_Look;
         private readonly InputAction m_player_Noclip;
+        private readonly InputAction m_player_Pause;
         public struct PlayerActions
         {
             private @PlayerMovement m_Wrapper;
@@ -290,6 +312,7 @@ namespace PlayerMovement
             public InputAction @Crouch => m_Wrapper.m_player_Crouch;
             public InputAction @Look => m_Wrapper.m_player_Look;
             public InputAction @Noclip => m_Wrapper.m_player_Noclip;
+            public InputAction @Pause => m_Wrapper.m_player_Pause;
             public InputActionMap Get() { return m_Wrapper.m_player; }
             public void Enable() { Get().Enable(); }
             public void Disable() { Get().Disable(); }
@@ -317,6 +340,9 @@ namespace PlayerMovement
                 @Noclip.started += instance.OnNoclip;
                 @Noclip.performed += instance.OnNoclip;
                 @Noclip.canceled += instance.OnNoclip;
+                @Pause.started += instance.OnPause;
+                @Pause.performed += instance.OnPause;
+                @Pause.canceled += instance.OnPause;
             }
 
             private void UnregisterCallbacks(IPlayerActions instance)
@@ -339,6 +365,9 @@ namespace PlayerMovement
                 @Noclip.started -= instance.OnNoclip;
                 @Noclip.performed -= instance.OnNoclip;
                 @Noclip.canceled -= instance.OnNoclip;
+                @Pause.started -= instance.OnPause;
+                @Pause.performed -= instance.OnPause;
+                @Pause.canceled -= instance.OnPause;
             }
 
             public void RemoveCallbacks(IPlayerActions instance)
@@ -364,6 +393,7 @@ namespace PlayerMovement
             void OnCrouch(InputAction.CallbackContext context);
             void OnLook(InputAction.CallbackContext context);
             void OnNoclip(InputAction.CallbackContext context);
+            void OnPause(InputAction.CallbackContext context);
         }
     }
 }
