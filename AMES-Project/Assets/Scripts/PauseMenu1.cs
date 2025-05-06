@@ -53,6 +53,11 @@ public class TestPauseMenu : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
     }
 
+    public void LoadScene(string sceneName)
+    {
+        SceneManager.LoadScene(sceneName);
+    }
+
     public void ExitGame()
     {
         SceneManager.LoadSceneAsync(0);
